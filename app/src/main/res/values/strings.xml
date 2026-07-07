@@ -13,7 +13,9 @@
     <string name="tracking_active">Tracking Active</string>
     <string name="tracking_offline">Tracking Offline</string>
     
-    <string name="no_internet">No Internet</string>
+    <string name="no_internet">No Internet Connection</string>
+    <string name="no_active_trip">No Active Trip Available</string>
+    <string name="bus_not_found">Bus Not Found</string>
     <string name="error_unknown">Unknown error: %s</string>
     
     <string name="last_updated">Last Updated</string>

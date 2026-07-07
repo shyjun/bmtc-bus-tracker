@@ -43,7 +43,7 @@ class TrackingService : Service() {
         val vehicleId = repository.getSavedVehicleId()
         val monitoringEnabled = repository.getMonitoringEnabled()
 
-        if (!monitoringEnabled) {
+        if (!monitoringEnabled || busNumber.isBlank() || vehicleId <= 0) {
             stopSelf()
             return START_NOT_STICKY
         }

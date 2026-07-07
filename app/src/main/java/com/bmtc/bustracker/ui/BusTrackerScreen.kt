@@ -14,7 +14,9 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,6 +36,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -45,16 +48,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.bmtc.bustracker.R
+import com.bmtc.bustracker.data.remote.VehicleData
 import com.bmtc.bustracker.data.repository.TrackingStatus
 import com.bmtc.bustracker.ui.theme.*
 import java.text.SimpleDateFormat
 import java.util.Locale
 import java.util.TimeZone
 
-/**
- * Root screen composable — single-screen BMTC Bus Tracker UI.
- * Uses MVVM architecture, observing state from BusTrackerViewModel.
- */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BusTrackerScreen(
@@ -66,12 +66,12 @@ fun BusTrackerScreen(
 ) {
     val context = LocalContext.current
     val state by viewModel.uiState.collectAsState()
+    val focusManager = LocalFocusManager.current
 
-    // Request Notification Permission on Android 13+
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
         val permissionLauncher = rememberLauncherForActivityResult(
             contract = ActivityResultContracts.RequestPermission(),
-            onResult = { /* No-op, system handles it or user denies */ }
+            onResult = { }
         )
         LaunchedEffect(Unit) {
             if (ContextCompat.checkSelfPermission(
@@ -92,10 +92,16 @@ fun BusTrackerScreen(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) {
+                        focusManager.clearFocus()
+                        viewModel.dismissSuggestions()
+                    }
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
-                // ─── 1. App Header ───────────────────────────────────────────
                 AppHeader()
 
                 Column(
@@ -106,42 +112,48 @@ fun BusTrackerScreen(
                 ) {
                     Spacer(modifier = Modifier.height(4.dp))
 
-                    // ─── 2. Bus Number Card ───────────────────────────────────
                     BusNumberCard(
-                        busNumber = viewModel.busInput,
+                        busInput = viewModel.busInput,
                         onBusNumberChange = { viewModel.onBusInputChange(it) },
                         isLoading = state.isLoading,
-                        onTrackClick = { viewModel.onTrackClicked() }
+                        isSearching = viewModel.isSearching,
+                        searchResults = viewModel.searchResults,
+                        showSuggestions = viewModel.showSuggestions,
+                        searchError = viewModel.searchError,
+                        onTrackClick = { viewModel.onTrackClicked() },
+                        onSuggestionSelected = { viewModel.onSuggestionSelected(it) },
+                        onDismissSuggestions = { viewModel.dismissSuggestions() }
                     )
 
-                    // ─── 3. Tracking Status Card ──────────────────────────────
-                    TrackingStatusCard(
-                        status = state.trackingStatus,
-                        lastRefreshOn = state.locationDetails?.lastRefreshOn,
-                        onRefreshClick = { viewModel.onRefreshClicked() },
-                        isLoading = state.isLoading
-                    )
+                    if (state.error != null) {
+                        ErrorCard(error = state.error!!)
+                    }
 
-                    // ─── 4. Current Bus Position Card ────────────────────────
-                    BusPositionCard(
-                        previousStop = state.locationDetails?.previousStop,
-                        nextStop = state.locationDetails?.nextStop
-                    )
+                    if (state.busNumber.isNotBlank() && state.vehicleId > 0) {
+                        TrackingStatusCard(
+                            status = state.trackingStatus,
+                            lastRefreshOn = state.locationDetails?.lastRefreshOn,
+                            onRefreshClick = { viewModel.onRefreshClicked() },
+                            isLoading = state.isLoading
+                        )
 
-                    // ─── 5. Monitoring Card (Replaces Alert Card) ────────────
-                    MonitoringCard(
-                        monitoringEnabled = state.monitoringEnabled,
-                        onMonitoringToggle = { viewModel.onMonitoringToggled(it) }
-                    )
+                        BusPositionCard(
+                            previousStop = state.locationDetails?.previousStop,
+                            nextStop = state.locationDetails?.nextStop
+                        )
 
-                    // ─── 6. Bottom Info Card ──────────────────────────────────
-                    BottomInfoCard(
-                        lastRefreshOn = state.locationDetails?.lastRefreshOn,
-                        trackingStatus = state.trackingStatus,
-                        monitoringEnabled = state.monitoringEnabled
-                    )
+                        MonitoringCard(
+                            monitoringEnabled = state.monitoringEnabled,
+                            onMonitoringToggle = { viewModel.onMonitoringToggled(it) }
+                        )
 
-                    // ─── 7. Footer ────────────────────────────────────────────
+                        BottomInfoCard(
+                            lastRefreshOn = state.locationDetails?.lastRefreshOn,
+                            trackingStatus = state.trackingStatus,
+                            monitoringEnabled = state.monitoringEnabled
+                        )
+                    }
+
                     Footer()
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -149,7 +161,6 @@ fun BusTrackerScreen(
             }
         }
 
-        // Global Loading Overlay
         if (state.isLoading) {
             Box(
                 modifier = Modifier
@@ -165,10 +176,6 @@ fun BusTrackerScreen(
         }
     }
 }
-
-// ══════════════════════════════════════════════════════════════════════
-// 1. APP HEADER
-// ══════════════════════════════════════════════════════════════════════
 
 @Composable
 fun AppHeader() {
@@ -186,7 +193,6 @@ fun AppHeader() {
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(14.dp)
         ) {
-            // Bus icon circle
             Box(
                 modifier = Modifier
                     .size(56.dp)
@@ -243,17 +249,19 @@ fun AppHeader() {
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// 2. BUS NUMBER CARD
-// ══════════════════════════════════════════════════════════════════════
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun BusNumberCard(
-    busNumber: String,
+    busInput: String,
     onBusNumberChange: (String) -> Unit,
     isLoading: Boolean,
-    onTrackClick: () -> Unit
+    isSearching: Boolean,
+    searchResults: List<VehicleData>,
+    showSuggestions: Boolean,
+    searchError: String?,
+    onTrackClick: () -> Unit,
+    onSuggestionSelected: (VehicleData) -> Unit,
+    onDismissSuggestions: () -> Unit
 ) {
     TrackerCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -275,104 +283,191 @@ fun BusNumberCard(
                 )
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                OutlinedTextField(
-                    value = busNumber,
-                    onValueChange = onBusNumberChange,
-                    modifier = Modifier.weight(1f),
-                    leadingIcon = {
-                        Icon(
-                            imageVector = Icons.Outlined.DirectionsBus,
-                            contentDescription = null,
-                            tint = TextSecondary,
-                            modifier = Modifier.size(20.dp)
+            Box {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    OutlinedTextField(
+                        value = busInput,
+                        onValueChange = onBusNumberChange,
+                        modifier = Modifier.weight(1f),
+                        leadingIcon = {
+                            Icon(
+                                imageVector = if (isSearching) Icons.Filled.Sync else Icons.Outlined.DirectionsBus,
+                                contentDescription = null,
+                                tint = if (isSearching) BmtcBlue else TextSecondary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        },
+                        trailingIcon = {
+                            if (busInput.isNotEmpty()) {
+                                IconButton(onClick = { onBusNumberChange("") }) {
+                                    Icon(
+                                        imageVector = Icons.Filled.Close,
+                                        contentDescription = "Clear",
+                                        tint = TextSecondary,
+                                        modifier = Modifier.size(18.dp)
+                                    )
+                                }
+                            }
+                        },
+                        placeholder = {
+                            Text(
+                                text = "KA57F4864",
+                                style = MaterialTheme.typography.bodyMedium.copy(color = TextHint)
+                            )
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Characters,
+                            keyboardType = KeyboardType.Text
+                        ),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = BmtcBlue,
+                            unfocusedBorderColor = DividerGray,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary,
+                            cursorColor = BmtcBlue,
+                        ),
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
+                    )
+
+                    Button(
+                        onClick = onTrackClick,
+                        enabled = !isLoading && busInput.isNotBlank(),
+                        modifier = Modifier
+                            .height(56.dp)
+                            .widthIn(min = 88.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = BmtcBlue,
+                            contentColor = Color.White
+                        ),
+                        elevation = ButtonDefaults.buttonElevation(
+                            defaultElevation = 4.dp,
+                            pressedElevation = 2.dp
                         )
-                    },
-                    trailingIcon = {
-                        if (busNumber.isNotEmpty()) {
-                            IconButton(onClick = { onBusNumberChange("") }) {
+                    ) {
+                        Text(
+                            text = stringResource(R.string.button_track),
+                            style = MaterialTheme.typography.labelLarge.copy(
+                                fontWeight = FontWeight.ExtraBold,
+                                letterSpacing = 1.sp
+                            )
+                        )
+                    }
+                }
+
+                DropdownMenu(
+                    expanded = showSuggestions,
+                    onDismissRequest = onDismissSuggestions,
+                    modifier = Modifier
+                        .fillMaxWidth(0.7f)
+                        .background(
+                            color = CardSurface,
+                            shape = RoundedCornerShape(12.dp)
+                        )
+                ) {
+                    searchResults.forEach { vehicle ->
+                        DropdownMenuItem(
+                            text = {
+                                Text(
+                                    text = vehicle.vehicleRegNo,
+                                    style = MaterialTheme.typography.bodyLarge.copy(
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = TextPrimary
+                                    )
+                                )
+                            },
+                            onClick = { onSuggestionSelected(vehicle) },
+                            leadingIcon = {
                                 Icon(
-                                    imageVector = Icons.Filled.Close,
-                                    contentDescription = "Clear",
-                                    tint = TextSecondary,
-                                    modifier = Modifier.size(18.dp)
+                                    imageVector = Icons.Outlined.DirectionsBus,
+                                    contentDescription = null,
+                                    tint = BmtcBlue,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
-                        }
-                    },
-                    placeholder = {
-                        Text(
-                            text = "KA57F4864",
-                            style = MaterialTheme.typography.bodyMedium.copy(color = TextHint)
                         )
-                    },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Characters,
-                        keyboardType = KeyboardType.Text
-                    ),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = BmtcBlue,
-                        unfocusedBorderColor = DividerGray,
-                        focusedTextColor = TextPrimary,
-                        unfocusedTextColor = TextPrimary,
-                        cursorColor = BmtcBlue,
-                    ),
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
-                )
-
-                Button(
-                    onClick = onTrackClick,
-                    enabled = !isLoading && busNumber.isNotBlank(),
-                    modifier = Modifier
-                        .height(56.dp)
-                        .widthIn(min = 88.dp),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = BmtcBlue,
-                        contentColor = Color.White
-                    ),
-                    elevation = ButtonDefaults.buttonElevation(
-                        defaultElevation = 4.dp,
-                        pressedElevation = 2.dp
-                    )
-                ) {
-                    Text(
-                        text = stringResource(R.string.button_track),
-                        style = MaterialTheme.typography.labelLarge.copy(
-                            fontWeight = FontWeight.ExtraBold,
-                            letterSpacing = 1.sp
-                        )
-                    )
+                    }
                 }
             }
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Info,
-                    contentDescription = null,
-                    tint = TextHint,
-                    modifier = Modifier.size(12.dp)
-                )
-                Text(
-                    text = stringResource(R.string.enter_bus_number_hint),
-                    style = MaterialTheme.typography.bodySmall.copy(color = TextHint)
-                )
+            if (searchError != null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Warning,
+                        contentDescription = null,
+                        tint = AlertRed,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = searchError,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = AlertRed,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+                }
+            } else {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Info,
+                        contentDescription = null,
+                        tint = TextHint,
+                        modifier = Modifier.size(12.dp)
+                    )
+                    Text(
+                        text = stringResource(R.string.enter_bus_number_hint),
+                        style = MaterialTheme.typography.bodySmall.copy(color = TextHint)
+                    )
+                }
             }
         }
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// 3. TRACKING STATUS CARD
-// ══════════════════════════════════════════════════════════════════════
+@Composable
+fun ErrorCard(error: String) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .shadow(elevation = 4.dp, shape = RoundedCornerShape(16.dp), clip = false),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = Color(0xFFFFF3E0)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Info,
+                contentDescription = null,
+                tint = Color(0xFFE65100),
+                modifier = Modifier.size(24.dp)
+            )
+            Text(
+                text = error,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    color = Color(0xFFE65100),
+                    fontWeight = FontWeight.SemiBold
+                )
+            )
+        }
+    }
+}
 
 @Composable
 fun TrackingStatusCard(
@@ -384,8 +479,8 @@ fun TrackingStatusCard(
     val cardBackground by animateColorAsState(
         targetValue = when (status) {
             TrackingStatus.ACTIVE -> TrackingGreenContainer
-            TrackingStatus.OFFLINE -> Color(0xFFFFEBEE) // light red
-            TrackingStatus.NO_INTERNET -> Color(0xFFF5F5F5) // light grey
+            TrackingStatus.OFFLINE -> Color(0xFFFFEBEE)
+            TrackingStatus.NO_INTERNET -> Color(0xFFF5F5F5)
         },
         label = "status_card_bg"
     )
@@ -414,14 +509,12 @@ fun TrackingStatusCard(
         TrackingStatus.NO_INTERNET -> stringResource(R.string.no_internet)
     }
 
-    // Show the raw lastRefreshOn string from the API directly — no re-parse risk
     val formattedLocalDateStr = lastRefreshOn ?: "N/A"
 
-    // Compute minutes-ago using the repository's robust parseDate
     val timeAgoStr = remember(lastRefreshOn) {
         if (lastRefreshOn == null) return@remember ""
         try {
-            val istZone = java.util.TimeZone.getTimeZone("Asia/Kolkata")
+            val istZone = TimeZone.getTimeZone("Asia/Kolkata")
             val timeRegex = Regex("""(\d{1,2}):(\d{2}):(\d{2})""")
             val m = timeRegex.find(lastRefreshOn)
             if (m != null) {
@@ -443,7 +536,6 @@ fun TrackingStatusCard(
         } catch (_: Exception) { "" }
     }
 
-
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -464,7 +556,6 @@ fun TrackingStatusCard(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                // Status icon circle
                 Box(
                     modifier = Modifier
                         .size(40.dp)
@@ -535,7 +626,6 @@ fun TrackingStatusCard(
                 }
             }
 
-            // Refresh button
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -566,10 +656,6 @@ fun TrackingStatusCard(
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// 4. BUS POSITION CARD (Route Visualization)
-// ══════════════════════════════════════════════════════════════════════
-
 @Composable
 fun BusPositionCard(
     previousStop: String?,
@@ -591,12 +677,10 @@ fun BusPositionCard(
             Row(
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Left: vertical line + icons
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     modifier = Modifier.width(48.dp)
                 ) {
-                    // Previous stop pin
                     Box(
                         modifier = Modifier
                             .size(32.dp)
@@ -612,13 +696,11 @@ fun BusPositionCard(
                         )
                     }
 
-                    // Dashed line segment top
                     DashedVerticalLine(
                         height = 28.dp,
                         color = PreviousStopGreen.copy(alpha = 0.5f)
                     )
 
-                    // Bus icon
                     Box(
                         modifier = Modifier
                             .size(30.dp)
@@ -635,13 +717,11 @@ fun BusPositionCard(
                         )
                     }
 
-                    // Dashed line segment bottom
                     DashedVerticalLine(
                         height = 28.dp,
                         color = NextStopBlue.copy(alpha = 0.5f)
                     )
 
-                    // Next stop pin
                     Box(
                         modifier = Modifier
                             .size(32.dp)
@@ -660,14 +740,12 @@ fun BusPositionCard(
 
                 Spacer(modifier = Modifier.width(12.dp))
 
-                // Right: stop labels
                 Column(
                     modifier = Modifier
                         .weight(1f)
                         .padding(top = 4.dp),
                     verticalArrangement = Arrangement.spacedBy(0.dp)
                 ) {
-                    // Previous stop
                     StopLabel(
                         label = stringResource(R.string.previous_stop),
                         labelColor = PreviousStopGreen,
@@ -675,10 +753,8 @@ fun BusPositionCard(
                         direction = ""
                     )
 
-                    // Spacer to align with bus icon + dashed lines
                     Spacer(modifier = Modifier.height(60.dp))
 
-                    // Next stop
                     StopLabel(
                         label = stringResource(R.string.next_stop),
                         labelColor = NextStopBlue,
@@ -756,10 +832,6 @@ fun DashedVerticalLine(
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// 5. MONITORING CARD (NEW design replacing Alert Card)
-// ══════════════════════════════════════════════════════════════════════
-
 @Composable
 fun MonitoringCard(
     monitoringEnabled: Boolean,
@@ -800,7 +872,6 @@ fun MonitoringCard(
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                // Shield icon
                 Box(
                     modifier = Modifier
                         .size(44.dp)
@@ -827,7 +898,7 @@ fun MonitoringCard(
                             fontWeight = FontWeight.Bold
                         )
                     )
-                    
+
                     if (monitoringEnabled) {
                         Text(
                             text = stringResource(R.string.monitoring_checking_desc),
@@ -885,10 +956,6 @@ fun MonitoringCard(
         }
     }
 }
-
-// ══════════════════════════════════════════════════════════════════════
-// 6. BOTTOM INFO CARD (3 columns)
-// ══════════════════════════════════════════════════════════════════════
 
 @Composable
 fun BottomInfoCard(
@@ -952,7 +1019,6 @@ fun BottomInfoCard(
                 valueColor = TextPrimary
             )
 
-            // Divider
             VerticalDivider(
                 modifier = Modifier.height(60.dp),
                 color = DividerGray,
@@ -967,7 +1033,6 @@ fun BottomInfoCard(
                 valueColor = statusValColor
             )
 
-            // Divider
             VerticalDivider(
                 modifier = Modifier.height(60.dp),
                 color = DividerGray,
@@ -1029,10 +1094,6 @@ fun InfoColumn(
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// 7. FOOTER
-// ══════════════════════════════════════════════════════════════════════
-
 @Composable
 fun Footer() {
     Row(
@@ -1060,10 +1121,6 @@ fun Footer() {
     }
 }
 
-// ══════════════════════════════════════════════════════════════════════
-// SHARED: Tracker Card wrapper
-// ══════════════════════════════════════════════════════════════════════
-
 @Composable
 fun TrackerCard(content: @Composable ColumnScope.() -> Unit) {
     Card(
@@ -1082,10 +1139,6 @@ fun TrackerCard(content: @Composable ColumnScope.() -> Unit) {
         )
     }
 }
-
-// ══════════════════════════════════════════════════════════════════════
-// PREVIEW
-// ══════════════════════════════════════════════════════════════════════
 
 @Preview(showBackground = true, showSystemUi = true, device = "spec:width=360dp,height=800dp,dpi=420")
 @Composable

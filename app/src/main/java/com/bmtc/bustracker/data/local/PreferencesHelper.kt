@@ -16,7 +16,7 @@ class PreferencesHelper(context: Context) {
     }
 
     fun getBusNumber(): String {
-        return sharedPreferences.getString(KEY_BUS_NUMBER, "KA57F4864") ?: "KA57F4864"
+        return sharedPreferences.getString(KEY_BUS_NUMBER, "") ?: ""
     }
 
     fun saveVehicleId(vehicleId: Int) {
@@ -24,7 +24,7 @@ class PreferencesHelper(context: Context) {
     }
 
     fun getVehicleId(): Int {
-        return sharedPreferences.getInt(KEY_VEHICLE_ID, 25597)
+        return sharedPreferences.getInt(KEY_VEHICLE_ID, 0)
     }
 
     fun saveMonitoringEnabled(enabled: Boolean) {

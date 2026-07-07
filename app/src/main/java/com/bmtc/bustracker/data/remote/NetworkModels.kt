@@ -2,6 +2,23 @@ package com.bmtc.bustracker.data.remote
 
 import com.google.gson.annotations.SerializedName
 
+data class ListVehiclesRequest(
+    @SerializedName("vehicleRegNo")
+    val vehicleRegNo: String
+)
+
+data class VehicleData(
+    @SerializedName("vehicleid")
+    val vehicleId: Int,
+    @SerializedName("vehicleregno")
+    val vehicleRegNo: String
+)
+
+data class ListVehiclesResponse(
+    @SerializedName("data")
+    val data: List<VehicleData>?
+)
+
 data class VehicleTripDetailsRequest(
     @SerializedName("vehicleId")
     val vehicleId: Int
