@@ -1,5 +1,16 @@
 package com.bmtc.bustracker.ui
 
+import android.Manifest
+import android.app.Application
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -20,9 +31,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -31,64 +43,124 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
+import com.bmtc.bustracker.R
+import com.bmtc.bustracker.data.repository.TrackingStatus
 import com.bmtc.bustracker.ui.theme.*
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 /**
  * Root screen composable — single-screen BMTC Bus Tracker UI.
- * UI-only: no networking, no business logic, placeholder data only.
+ * Uses MVVM architecture, observing state from BusTrackerViewModel.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BusTrackerScreen() {
-    var busNumber by remember { mutableStateOf("KA57F4864") }
-    var alertEnabled by remember { mutableStateOf(true) }
+fun BusTrackerScreen(
+    viewModel: BusTrackerViewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+        factory = BusTrackerViewModel.Factory(
+            LocalContext.current.applicationContext as Application
+        )
+    )
+) {
+    val context = LocalContext.current
+    val state by viewModel.uiState.collectAsState()
 
-    Scaffold(
-        containerColor = BackgroundGray,
-    ) { paddingValues ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-            // ─── 1. App Header ───────────────────────────────────────────
-            AppHeader()
+    // Request Notification Permission on Android 13+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val permissionLauncher = rememberLauncherForActivityResult(
+            contract = ActivityResultContracts.RequestPermission(),
+            onResult = { /* No-op, system handles it or user denies */ }
+        )
+        LaunchedEffect(Unit) {
+            if (ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+    }
 
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            containerColor = BackgroundGray,
+        ) { paddingValues ->
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                    .fillMaxSize()
+                    .padding(paddingValues)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
-                Spacer(modifier = Modifier.height(4.dp))
+                // ─── 1. App Header ───────────────────────────────────────────
+                AppHeader()
 
-                // ─── 2. Bus Number Card ───────────────────────────────────
-                BusNumberCard(
-                    busNumber = busNumber,
-                    onBusNumberChange = { busNumber = it.uppercase() }
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    // ─── 2. Bus Number Card ───────────────────────────────────
+                    BusNumberCard(
+                        busNumber = viewModel.busInput,
+                        onBusNumberChange = { viewModel.onBusInputChange(it) },
+                        isLoading = state.isLoading,
+                        onTrackClick = { viewModel.onTrackClicked() }
+                    )
+
+                    // ─── 3. Tracking Status Card ──────────────────────────────
+                    TrackingStatusCard(
+                        status = state.trackingStatus,
+                        lastRefreshOn = state.locationDetails?.lastRefreshOn,
+                        onRefreshClick = { viewModel.onRefreshClicked() },
+                        isLoading = state.isLoading
+                    )
+
+                    // ─── 4. Current Bus Position Card ────────────────────────
+                    BusPositionCard(
+                        previousStop = state.locationDetails?.previousStop,
+                        nextStop = state.locationDetails?.nextStop
+                    )
+
+                    // ─── 5. Monitoring Card (Replaces Alert Card) ────────────
+                    MonitoringCard(
+                        monitoringEnabled = state.monitoringEnabled,
+                        onMonitoringToggle = { viewModel.onMonitoringToggled(it) }
+                    )
+
+                    // ─── 6. Bottom Info Card ──────────────────────────────────
+                    BottomInfoCard(
+                        lastRefreshOn = state.locationDetails?.lastRefreshOn,
+                        trackingStatus = state.trackingStatus,
+                        monitoringEnabled = state.monitoringEnabled
+                    )
+
+                    // ─── 7. Footer ────────────────────────────────────────────
+                    Footer()
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+        }
+
+        // Global Loading Overlay
+        if (state.isLoading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                CircularProgressIndicator(
+                    color = BmtcBlue,
+                    modifier = Modifier.size(48.dp)
                 )
-
-                // ─── 3. Tracking Status Card ──────────────────────────────
-                TrackingStatusCard()
-
-                // ─── 4. Current Bus Position Card ────────────────────────
-                BusPositionCard()
-
-                // ─── 5. Alert Card ────────────────────────────────────────
-                TrackingAlertCard(
-                    alertEnabled = alertEnabled,
-                    onAlertToggle = { alertEnabled = it }
-                )
-
-                // ─── 6. Bottom Info Card ──────────────────────────────────
-                BottomInfoCard()
-
-                // ─── 7. Footer ────────────────────────────────────────────
-                Footer()
-
-                Spacer(modifier = Modifier.height(16.dp))
             }
         }
     }
@@ -104,7 +176,7 @@ fun AppHeader() {
         modifier = Modifier
             .fillMaxWidth()
             .background(
-                brush = Brush.verticalGradient(
+                brush = androidx.compose.ui.graphics.Brush.verticalGradient(
                     colors = listOf(BmtcBlueDark, BmtcBlue)
                 )
             )
@@ -132,7 +204,7 @@ fun AppHeader() {
 
             Column {
                 Text(
-                    text = "BMTC Bus Tracker",
+                    text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleLarge.copy(
                         color = Color.White,
                         fontWeight = FontWeight.ExtraBold,
@@ -179,7 +251,9 @@ fun AppHeader() {
 @Composable
 fun BusNumberCard(
     busNumber: String,
-    onBusNumberChange: (String) -> Unit
+    onBusNumberChange: (String) -> Unit,
+    isLoading: Boolean,
+    onTrackClick: () -> Unit
 ) {
     TrackerCard {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -193,7 +267,7 @@ fun BusNumberCard(
                 )
                 Spacer(modifier = Modifier.width(8.dp))
                 Text(
-                    text = "Enter Bus Number",
+                    text = stringResource(R.string.enter_bus_number),
                     style = MaterialTheme.typography.titleSmall.copy(
                         color = BmtcBlue,
                         fontWeight = FontWeight.Bold
@@ -252,7 +326,8 @@ fun BusNumberCard(
                 )
 
                 Button(
-                    onClick = { /* UI only */ },
+                    onClick = onTrackClick,
+                    enabled = !isLoading && busNumber.isNotBlank(),
                     modifier = Modifier
                         .height(56.dp)
                         .widthIn(min = 88.dp),
@@ -267,7 +342,7 @@ fun BusNumberCard(
                     )
                 ) {
                     Text(
-                        text = "TRACK",
+                        text = stringResource(R.string.button_track),
                         style = MaterialTheme.typography.labelLarge.copy(
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = 1.sp
@@ -287,7 +362,7 @@ fun BusNumberCard(
                     modifier = Modifier.size(12.dp)
                 )
                 Text(
-                    text = "Enter bus number (e.g., KA57F4864)",
+                    text = stringResource(R.string.enter_bus_number_hint),
                     style = MaterialTheme.typography.bodySmall.copy(color = TextHint)
                 )
             }
@@ -300,13 +375,108 @@ fun BusNumberCard(
 // ══════════════════════════════════════════════════════════════════════
 
 @Composable
-fun TrackingStatusCard() {
+fun TrackingStatusCard(
+    status: TrackingStatus,
+    lastRefreshOn: String?,
+    onRefreshClick: () -> Unit,
+    isLoading: Boolean
+) {
+    val cardBackground by animateColorAsState(
+        targetValue = when (status) {
+            TrackingStatus.ACTIVE -> TrackingGreenContainer
+            TrackingStatus.OFFLINE -> Color(0xFFFFEBEE) // light red
+            TrackingStatus.NO_INTERNET -> Color(0xFFF5F5F5) // light grey
+        },
+        label = "status_card_bg"
+    )
+
+    val statusColor = when (status) {
+        TrackingStatus.ACTIVE -> TrackingGreen
+        TrackingStatus.OFFLINE -> AlertRed
+        TrackingStatus.NO_INTERNET -> TextSecondary
+    }
+
+    val iconBg = when (status) {
+        TrackingStatus.ACTIVE -> TrackingGreen
+        TrackingStatus.OFFLINE -> AlertRed
+        TrackingStatus.NO_INTERNET -> TextHint
+    }
+
+    val statusIcon = when (status) {
+        TrackingStatus.ACTIVE -> Icons.Filled.Check
+        TrackingStatus.OFFLINE -> Icons.Filled.Warning
+        TrackingStatus.NO_INTERNET -> Icons.Filled.WifiOff
+    }
+
+    val statusText = when (status) {
+        TrackingStatus.ACTIVE -> stringResource(R.string.tracking_active)
+        TrackingStatus.OFFLINE -> stringResource(R.string.tracking_offline)
+        TrackingStatus.NO_INTERNET -> stringResource(R.string.no_internet)
+    }
+
+    // Convert date string to local device time for display
+    val formattedLocalDateStr = remember(lastRefreshOn) {
+        if (lastRefreshOn != null) {
+            try {
+                val formats = listOf("dd-MMM-yyyy HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss")
+                var parsedDate: java.util.Date? = null
+                for (format in formats) {
+                    try {
+                        val sdf = SimpleDateFormat(format, Locale.ENGLISH)
+                        sdf.timeZone = TimeZone.getTimeZone("Asia/Kolkata")
+                        parsedDate = sdf.parse(lastRefreshOn)
+                        if (parsedDate != null) break
+                    } catch (e: Exception) {}
+                }
+                if (parsedDate != null) {
+                    val sdf = SimpleDateFormat("dd-MMM-yyyy HH:mm:ss", Locale.getDefault())
+                    sdf.timeZone = TimeZone.getDefault()
+                    sdf.format(parsedDate)
+                } else {
+                    lastRefreshOn
+                }
+            } catch (e: Exception) {
+                lastRefreshOn
+            }
+        } else {
+            "N/A"
+        }
+    }
+
+    val timeAgoStr = remember(lastRefreshOn) {
+        if (lastRefreshOn != null) {
+            try {
+                val formats = listOf("dd-MMM-yyyy HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss")
+                var parsedDate: java.util.Date? = null
+                for (format in formats) {
+                    try {
+                        val sdf = SimpleDateFormat(format, Locale.ENGLISH)
+                        sdf.timeZone = TimeZone.getTimeZone("Asia/Kolkata")
+                        parsedDate = sdf.parse(lastRefreshOn)
+                        if (parsedDate != null) break
+                    } catch (e: Exception) {}
+                }
+                if (parsedDate != null) {
+                    val diffMs = System.currentTimeMillis() - parsedDate.time
+                    val diffMins = diffMs / (1000 * 60)
+                    if (diffMins < 0) "(0 min ago)" else "($diffMins min ago)"
+                } else {
+                    ""
+                }
+            } catch (e: Exception) {
+                ""
+            }
+        } else {
+            ""
+        }
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(elevation = 4.dp, shape = RoundedCornerShape(16.dp), clip = false),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = TrackingGreenContainer),
+        colors = CardDefaults.cardColors(containerColor = cardBackground),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
@@ -321,51 +491,74 @@ fun TrackingStatusCard() {
                 horizontalArrangement = Arrangement.spacedBy(14.dp),
                 modifier = Modifier.weight(1f)
             ) {
-                // Green check circle
+                // Status icon circle
                 Box(
                     modifier = Modifier
                         .size(40.dp)
                         .clip(CircleShape)
-                        .background(TrackingGreen),
+                        .background(iconBg),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Filled.Check,
-                        contentDescription = "Active",
+                        imageVector = statusIcon,
+                        contentDescription = statusText,
                         tint = Color.White,
                         modifier = Modifier.size(22.dp)
                     )
                 }
 
                 Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = "Tracking Active",
-                        style = MaterialTheme.typography.titleSmall.copy(
-                            color = TrackingGreen,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 15.sp
+                    AnimatedContent(
+                        targetState = statusText,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "status_text"
+                    ) { targetText ->
+                        Text(
+                            text = targetText,
+                            style = MaterialTheme.typography.titleSmall.copy(
+                                color = statusColor,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp
+                            )
                         )
-                    )
+                    }
+
                     Text(
-                        text = "Last Updated",
+                        text = stringResource(R.string.last_updated),
                         style = MaterialTheme.typography.labelSmall.copy(
                             color = TextSecondary,
                             fontWeight = FontWeight.Medium
                         )
                     )
-                    Text(
-                        text = "07-Jul-2026 10:50:45",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = TextPrimary,
-                            fontWeight = FontWeight.SemiBold
+
+                    AnimatedContent(
+                        targetState = formattedLocalDateStr,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "local_date_str"
+                    ) { targetDate ->
+                        Text(
+                            text = targetDate,
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = TextPrimary,
+                                fontWeight = FontWeight.SemiBold
+                            )
                         )
-                    )
-                    Text(
-                        text = "(0 min ago)",
-                        style = MaterialTheme.typography.bodySmall.copy(
-                            color = TextSecondary
-                        )
-                    )
+                    }
+
+                    AnimatedContent(
+                        targetState = timeAgoStr,
+                        transitionSpec = { fadeIn() togetherWith fadeOut() },
+                        label = "time_ago_str"
+                    ) { targetAgo ->
+                        if (targetAgo.isNotEmpty()) {
+                            Text(
+                                text = targetAgo,
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = TextSecondary
+                                )
+                            )
+                        }
+                    }
                 }
             }
 
@@ -375,7 +568,8 @@ fun TrackingStatusCard() {
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 IconButton(
-                    onClick = { /* UI only */ },
+                    onClick = onRefreshClick,
+                    enabled = !isLoading,
                     modifier = Modifier.size(40.dp)
                 ) {
                     Icon(
@@ -386,7 +580,7 @@ fun TrackingStatusCard() {
                     )
                 }
                 Text(
-                    text = "REFRESH",
+                    text = stringResource(R.string.button_refresh),
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = BmtcBlue,
                         fontWeight = FontWeight.Bold,
@@ -404,11 +598,14 @@ fun TrackingStatusCard() {
 // ══════════════════════════════════════════════════════════════════════
 
 @Composable
-fun BusPositionCard() {
+fun BusPositionCard(
+    previousStop: String?,
+    nextStop: String?
+) {
     TrackerCard {
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
-                text = "Bus is currently between",
+                text = stringResource(R.string.bus_is_between),
                 style = MaterialTheme.typography.titleSmall.copy(
                     color = TextPrimary,
                     fontWeight = FontWeight.Bold,
@@ -499,21 +696,21 @@ fun BusPositionCard() {
                 ) {
                     // Previous stop
                     StopLabel(
-                        label = "PREVIOUS STOP",
+                        label = stringResource(R.string.previous_stop),
                         labelColor = PreviousStopGreen,
-                        stopName = "Bengaluru Dairy Circle",
-                        direction = "(Towards Madivala)"
+                        stopName = previousStop ?: "---",
+                        direction = ""
                     )
 
                     // Spacer to align with bus icon + dashed lines
-                    Spacer(modifier = Modifier.height(72.dp))
+                    Spacer(modifier = Modifier.height(60.dp))
 
                     // Next stop
                     StopLabel(
-                        label = "NEXT STOP",
+                        label = stringResource(R.string.next_stop),
                         labelColor = NextStopBlue,
-                        stopName = "Hosur Road Junction",
-                        direction = "(Towards Madivala)"
+                        stopName = nextStop ?: "---",
+                        direction = ""
                     )
                 }
             }
@@ -538,19 +735,27 @@ fun StopLabel(
                 fontSize = 10.sp
             )
         )
-        Text(
-            text = stopName,
-            style = MaterialTheme.typography.bodyLarge.copy(
-                color = TextPrimary,
-                fontWeight = FontWeight.Bold
+        AnimatedContent(
+            targetState = stopName,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "stop_name"
+        ) { targetName ->
+            Text(
+                text = targetName,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    color = TextPrimary,
+                    fontWeight = FontWeight.Bold
+                )
             )
-        )
-        Text(
-            text = direction,
-            style = MaterialTheme.typography.bodySmall.copy(
-                color = TextSecondary
+        }
+        if (direction.isNotEmpty()) {
+            Text(
+                text = direction,
+                style = MaterialTheme.typography.bodySmall.copy(
+                    color = TextSecondary
+                )
             )
-        )
+        }
     }
 }
 
@@ -579,78 +784,131 @@ fun DashedVerticalLine(
 }
 
 // ══════════════════════════════════════════════════════════════════════
-// 5. TRACKING ALERT CARD
+// 5. MONITORING CARD (NEW design replacing Alert Card)
 // ══════════════════════════════════════════════════════════════════════
 
 @Composable
-fun TrackingAlertCard(
-    alertEnabled: Boolean,
-    onAlertToggle: (Boolean) -> Unit
+fun MonitoringCard(
+    monitoringEnabled: Boolean,
+    onMonitoringToggle: (Boolean) -> Unit
 ) {
+    val cardBackground by animateColorAsState(
+        targetValue = if (monitoringEnabled) BmtcBlueContainer.copy(alpha = 0.5f) else Color(0xFFEBEBEB),
+        label = "monitoring_card_bg"
+    )
+
+    val shieldColor = if (monitoringEnabled) TrackingGreen else TextHint
+    val shieldBg = if (monitoringEnabled) TrackingGreen.copy(alpha = 0.12f) else DividerGray
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .shadow(elevation = 4.dp, shape = RoundedCornerShape(16.dp), clip = false),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = BmtcBlueContainer.copy(alpha = 0.5f)
-        ),
+        colors = CardDefaults.cardColors(containerColor = cardBackground),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-        Row(
+        Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Bell icon
-            Box(
-                modifier = Modifier
-                    .size(44.dp)
-                    .clip(CircleShape)
-                    .background(BmtcBlue.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Outlined.Notifications,
-                    contentDescription = null,
-                    tint = BmtcBlue,
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-
-            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                Text(
-                    text = "Tracking Stop Alert",
-                    style = MaterialTheme.typography.titleSmall.copy(
-                        color = BmtcBlue,
-                        fontWeight = FontWeight.Bold
-                    )
-                )
-                Text(
-                    text = "Notify me if tracking has not been updated for more than ",
-                    style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary),
-                )
-                Text(
-                    text = "10 minutes.",
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        color = BmtcBlue,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                )
-            }
-
-            Switch(
-                checked = alertEnabled,
-                onCheckedChange = onAlertToggle,
-                colors = SwitchDefaults.colors(
-                    checkedThumbColor = Color.White,
-                    checkedTrackColor = BmtcBlue,
-                    uncheckedThumbColor = Color.White,
-                    uncheckedTrackColor = DividerGray
+            Text(
+                text = stringResource(R.string.monitoring_status),
+                style = MaterialTheme.typography.titleSmall.copy(
+                    color = BmtcBlue,
+                    fontWeight = FontWeight.Bold
                 )
             )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                // Shield icon
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(shieldBg),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Shield,
+                        contentDescription = "Shield",
+                        tint = shieldColor,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = if (monitoringEnabled) stringResource(R.string.monitoring_enabled) else stringResource(R.string.monitoring_disabled),
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            color = if (monitoringEnabled) TrackingGreen else TextSecondary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    
+                    if (monitoringEnabled) {
+                        Text(
+                            text = stringResource(R.string.monitoring_checking_desc),
+                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                        )
+                        Text(
+                            text = stringResource(R.string.monitoring_alert_desc),
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = BmtcBlue,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        )
+                    }
+                }
+            }
+
+            HorizontalDivider(
+                color = if (monitoringEnabled) DividerGray else DividerGray.copy(alpha = 0.5f),
+                thickness = 1.dp
+            )
+
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = stringResource(R.string.notification_status),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Text(
+                        text = if (monitoringEnabled) stringResource(R.string.notification_enabled) else stringResource(R.string.notification_disabled),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = if (monitoringEnabled) BmtcBlue else TextSecondary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+                }
+
+                Switch(
+                    checked = monitoringEnabled,
+                    onCheckedChange = onMonitoringToggle,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = BmtcBlue,
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = DividerGray
+                    )
+                )
+            }
         }
     }
 }
@@ -660,7 +918,54 @@ fun TrackingAlertCard(
 // ══════════════════════════════════════════════════════════════════════
 
 @Composable
-fun BottomInfoCard() {
+fun BottomInfoCard(
+    lastRefreshOn: String?,
+    trackingStatus: TrackingStatus,
+    monitoringEnabled: Boolean
+) {
+    val timeOnly = remember(lastRefreshOn) {
+        if (lastRefreshOn != null) {
+            try {
+                val formats = listOf("dd-MMM-yyyy HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss")
+                var parsedDate: java.util.Date? = null
+                for (format in formats) {
+                    try {
+                        val sdf = SimpleDateFormat(format, Locale.ENGLISH)
+                        sdf.timeZone = TimeZone.getTimeZone("Asia/Kolkata")
+                        parsedDate = sdf.parse(lastRefreshOn)
+                        if (parsedDate != null) break
+                    } catch (e: Exception) {}
+                }
+                if (parsedDate != null) {
+                    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
+                    sdf.timeZone = TimeZone.getDefault()
+                    sdf.format(parsedDate)
+                } else {
+                    lastRefreshOn
+                }
+            } catch (e: Exception) {
+                lastRefreshOn
+            }
+        } else {
+            "--:--:--"
+        }
+    }
+
+    val statusVal = when (trackingStatus) {
+        TrackingStatus.ACTIVE -> "Running"
+        TrackingStatus.OFFLINE -> "Offline"
+        TrackingStatus.NO_INTERNET -> "No Internet"
+    }
+
+    val statusValColor = when (trackingStatus) {
+        TrackingStatus.ACTIVE -> StatusRunningGreen
+        TrackingStatus.OFFLINE -> AlertRed
+        TrackingStatus.NO_INTERNET -> TextSecondary
+    }
+
+    val alertVal = if (monitoringEnabled) "Enabled" else "Disabled"
+    val alertValColor = if (monitoringEnabled) AlertRed else TextSecondary
+
     TrackerCard {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -669,16 +974,14 @@ fun BottomInfoCard() {
             InfoColumn(
                 icon = Icons.Outlined.AccessTime,
                 iconTint = TrackingGreen,
-                title = "Last Update",
-                value = "10:50:45",
+                title = stringResource(R.string.last_updated),
+                value = timeOnly,
                 valueColor = TextPrimary
             )
 
             // Divider
-            Divider(
-                modifier = Modifier
-                    .height(60.dp)
-                    .width(1.dp),
+            VerticalDivider(
+                modifier = Modifier.height(60.dp),
                 color = DividerGray,
                 thickness = 1.dp
             )
@@ -687,15 +990,13 @@ fun BottomInfoCard() {
                 icon = Icons.Outlined.Sync,
                 iconTint = BmtcBlue,
                 title = "Status",
-                value = "Running",
-                valueColor = StatusRunningGreen
+                value = statusVal,
+                valueColor = statusValColor
             )
 
             // Divider
-            Divider(
-                modifier = Modifier
-                    .height(60.dp)
-                    .width(1.dp),
+            VerticalDivider(
+                modifier = Modifier.height(60.dp),
                 color = DividerGray,
                 thickness = 1.dp
             )
@@ -704,8 +1005,8 @@ fun BottomInfoCard() {
                 icon = Icons.Outlined.NotificationsActive,
                 iconTint = AlertRed,
                 title = "Alert",
-                value = "Enabled",
-                valueColor = AlertRed
+                value = alertVal,
+                valueColor = alertValColor
             )
         }
     }
@@ -738,14 +1039,20 @@ fun InfoColumn(
             ),
             textAlign = TextAlign.Center
         )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.labelMedium.copy(
-                color = valueColor,
-                fontWeight = FontWeight.Bold
-            ),
-            textAlign = TextAlign.Center
-        )
+        AnimatedContent(
+            targetState = value,
+            transitionSpec = { fadeIn() togetherWith fadeOut() },
+            label = "info_val"
+        ) { targetValue ->
+            Text(
+                text = targetValue,
+                style = MaterialTheme.typography.labelMedium.copy(
+                    color = valueColor,
+                    fontWeight = FontWeight.Bold
+                ),
+                textAlign = TextAlign.Center
+            )
+        }
     }
 }
 
@@ -770,7 +1077,7 @@ fun Footer() {
         )
         Spacer(modifier = Modifier.width(4.dp))
         Text(
-            text = "Data provided by BMTC  •  Updates every 5 minutes",
+            text = stringResource(R.string.data_source_footer),
             style = MaterialTheme.typography.bodySmall.copy(
                 color = TextHint,
                 fontSize = 11.sp
@@ -810,7 +1117,7 @@ fun TrackerCard(content: @Composable ColumnScope.() -> Unit) {
 @Preview(showBackground = true, showSystemUi = true, device = "spec:width=360dp,height=800dp,dpi=420")
 @Composable
 fun BusTrackerScreenPreview() {
-    com.bmtc.bustracker.ui.theme.BmtcBusTrackerTheme {
+    BmtcBusTrackerTheme {
         BusTrackerScreen()
     }
 }
