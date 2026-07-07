@@ -13,7 +13,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.bmtc.bustracker.data.repository.BmtcRepository
-import com.bmtc.bustracker.data.repository.TrackingStatus
+import com.bmtc.bustracker.data.repository.TrackingUiState
 import com.bmtc.bustracker.service.TrackingService
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
@@ -21,14 +21,14 @@ import kotlinx.coroutines.launch
 class BusTrackerViewModel(private val application: Application) : AndroidViewModel(application) {
 
     private val repository = BmtcRepository.getInstance(application)
-    val uiState: StateFlow<com.bmtc.bustracker.data.repository.TrackingUiState> = repository.uiState
+    val uiState: StateFlow<TrackingUiState> = repository.uiState
 
     var busInput by mutableStateOf("")
         private set
 
     init {
         busInput = repository.getSavedBusNumber()
-        
+
         // Start foreground service if monitoring is enabled on startup
         if (repository.getMonitoringEnabled()) {
             startTrackingService()
@@ -47,7 +47,7 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
 
         viewModelScope.launch {
             repository.fetchTrackingUpdate(busInput, vehicleId)
-            
+
             // If monitoring is enabled, restart the service to apply new bus info
             if (repository.getMonitoringEnabled()) {
                 startTrackingService()
@@ -59,7 +59,7 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
         val state = uiState.value
         viewModelScope.launch {
             val result = repository.fetchTrackingUpdate(state.busNumber, state.vehicleId)
-            
+
             if (result.isSuccess) {
                 // Cancel stale notification and reset notification flag
                 cancelStaleNotification()
@@ -76,6 +76,7 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
             stopTrackingService()
             cancelStaleNotification()
             repository.setStaleNotificationSent(false)
+        }
     }
 
     fun parseDate(dateStr: String?): java.util.Date? {
@@ -97,7 +98,8 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
     }
 
     private fun cancelStaleNotification() {
-        val notificationManager = application.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val notificationManager =
+            application.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(1002) // STALE_NOTIFICATION_ID is 1002
     }
 

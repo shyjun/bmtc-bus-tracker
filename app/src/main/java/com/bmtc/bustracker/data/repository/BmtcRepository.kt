@@ -12,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import java.io.IOException
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
@@ -156,24 +157,53 @@ class BmtcRepository private constructor(context: Context) {
 
     fun parseDate(dateStr: String?): Date? {
         if (dateStr.isNullOrBlank()) return null
+        val normalized = dateStr.trim()
+        val istZone = TimeZone.getTimeZone("Asia/Kolkata")
+
+        // Try every known format; skip any result whose year < 2020
+        // (guards against 2-digit years being read as e.g. year 26 AD)
         val formats = listOf(
-            "dd-MMM-yyyy HH:mm:ss",
+            "dd-MMM-yy HH:mm:ss",   // 2-digit year, alpha month  e.g. 07-Jul-26 20:10:33
+            "dd-MMM-yyyy HH:mm:ss", // 4-digit year, alpha month  e.g. 07-Jul-2026 20:10:33
+            "dd-MM-yy HH:mm:ss",    // 2-digit year, numeric month e.g. 07-07-26 20:10:33
+            "dd-MM-yyyy HH:mm:ss",  // 4-digit year, numeric month e.g. 07-07-2026 20:10:33
             "yyyy-MM-dd HH:mm:ss",
             "yyyy-MM-dd'T'HH:mm:ss",
-            "dd-MM-yyyy HH:mm:ss",
             "dd/MM/yyyy HH:mm:ss"
         )
-        val normalized = dateStr.trim()
         for (format in formats) {
             try {
                 val sdf = SimpleDateFormat(format, Locale.ENGLISH)
-                sdf.timeZone = TimeZone.getTimeZone("Asia/Kolkata") // BMTC dates are in India Standard Time
-                sdf.isLenient = false
-                return sdf.parse(normalized)
-            } catch (e: Exception) {
-                // Try next format
-            }
+                sdf.timeZone = istZone
+                val date = sdf.parse(normalized) ?: continue
+                // Reject obviously wrong years caused by 2-digit year mis-parses
+                val cal = Calendar.getInstance(istZone)
+                cal.time = date
+                if (cal.get(Calendar.YEAR) < 2020) continue
+                return date
+            } catch (_: Exception) {}
         }
+
+        // Fallback: extract HH:mm:ss from anywhere in the string and combine with TODAY's IST date.
+        // This handles completely unknown date formats while still giving a correct freshness check.
+        val timeRegex = Regex("""(\d{1,2}):(\d{2}):(\d{2})""")
+        val m = timeRegex.find(normalized)
+        if (m != null) {
+            val hour = m.groupValues[1].toIntOrNull() ?: return null
+            val min  = m.groupValues[2].toIntOrNull() ?: return null
+            val sec  = m.groupValues[3].toIntOrNull() ?: return null
+            val cal = Calendar.getInstance(istZone)
+            cal.set(Calendar.HOUR_OF_DAY, hour)
+            cal.set(Calendar.MINUTE, min)
+            cal.set(Calendar.SECOND, sec)
+            cal.set(Calendar.MILLISECOND, 0)
+            // If the resulting time is more than 1 hour in the future, assume it belongs to yesterday
+            if (cal.timeInMillis > System.currentTimeMillis() + 60 * 60 * 1000L) {
+                cal.add(Calendar.DAY_OF_MONTH, -1)
+            }
+            return cal.time
+        }
+
         return null
     }
 

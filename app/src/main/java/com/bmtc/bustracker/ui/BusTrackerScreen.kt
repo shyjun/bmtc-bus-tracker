@@ -414,62 +414,35 @@ fun TrackingStatusCard(
         TrackingStatus.NO_INTERNET -> stringResource(R.string.no_internet)
     }
 
-    // Convert date string to local device time for display
-    val formattedLocalDateStr = remember(lastRefreshOn) {
-        if (lastRefreshOn != null) {
-            try {
-                val formats = listOf("dd-MMM-yyyy HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss")
-                var parsedDate: java.util.Date? = null
-                for (format in formats) {
-                    try {
-                        val sdf = SimpleDateFormat(format, Locale.ENGLISH)
-                        sdf.timeZone = TimeZone.getTimeZone("Asia/Kolkata")
-                        parsedDate = sdf.parse(lastRefreshOn)
-                        if (parsedDate != null) break
-                    } catch (e: Exception) {}
+    // Show the raw lastRefreshOn string from the API directly — no re-parse risk
+    val formattedLocalDateStr = lastRefreshOn ?: "N/A"
+
+    // Compute minutes-ago using the repository's robust parseDate
+    val timeAgoStr = remember(lastRefreshOn) {
+        if (lastRefreshOn == null) return@remember ""
+        try {
+            val istZone = java.util.TimeZone.getTimeZone("Asia/Kolkata")
+            val timeRegex = Regex("""(\d{1,2}):(\d{2}):(\d{2})""")
+            val m = timeRegex.find(lastRefreshOn)
+            if (m != null) {
+                val hour = m.groupValues[1].toIntOrNull() ?: return@remember ""
+                val min  = m.groupValues[2].toIntOrNull() ?: return@remember ""
+                val sec  = m.groupValues[3].toIntOrNull() ?: return@remember ""
+                val cal = java.util.Calendar.getInstance(istZone)
+                cal.set(java.util.Calendar.HOUR_OF_DAY, hour)
+                cal.set(java.util.Calendar.MINUTE, min)
+                cal.set(java.util.Calendar.SECOND, sec)
+                cal.set(java.util.Calendar.MILLISECOND, 0)
+                if (cal.timeInMillis > System.currentTimeMillis() + 60 * 60 * 1000L) {
+                    cal.add(java.util.Calendar.DAY_OF_MONTH, -1)
                 }
-                if (parsedDate != null) {
-                    val sdf = SimpleDateFormat("dd-MMM-yyyy HH:mm:ss", Locale.getDefault())
-                    sdf.timeZone = TimeZone.getDefault()
-                    sdf.format(parsedDate)
-                } else {
-                    lastRefreshOn
-                }
-            } catch (e: Exception) {
-                lastRefreshOn
-            }
-        } else {
-            "N/A"
-        }
+                val diffMs = System.currentTimeMillis() - cal.timeInMillis
+                val diffMins = diffMs / (1000 * 60)
+                if (diffMins <= 0L) "(just now)" else "($diffMins min ago)"
+            } else ""
+        } catch (_: Exception) { "" }
     }
 
-    val timeAgoStr = remember(lastRefreshOn) {
-        if (lastRefreshOn != null) {
-            try {
-                val formats = listOf("dd-MMM-yyyy HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss")
-                var parsedDate: java.util.Date? = null
-                for (format in formats) {
-                    try {
-                        val sdf = SimpleDateFormat(format, Locale.ENGLISH)
-                        sdf.timeZone = TimeZone.getTimeZone("Asia/Kolkata")
-                        parsedDate = sdf.parse(lastRefreshOn)
-                        if (parsedDate != null) break
-                    } catch (e: Exception) {}
-                }
-                if (parsedDate != null) {
-                    val diffMs = System.currentTimeMillis() - parsedDate.time
-                    val diffMins = diffMs / (1000 * 60)
-                    if (diffMins < 0) "(0 min ago)" else "($diffMins min ago)"
-                } else {
-                    ""
-                }
-            } catch (e: Exception) {
-                ""
-            }
-        } else {
-            ""
-        }
-    }
 
     Card(
         modifier = Modifier
