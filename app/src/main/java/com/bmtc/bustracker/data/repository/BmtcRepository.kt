@@ -50,7 +50,7 @@ class BmtcRepository private constructor(context: Context) {
         val status = if (lastLoc != null) {
             calculateTrackingStatus(lastLoc.lastRefreshOn)
         } else {
-            TrackingStatus.OFFLINE
+            TrackingStatus.ACTIVE
         }
 
         _uiState.update {
@@ -144,10 +144,10 @@ class BmtcRepository private constructor(context: Context) {
     }
 
     fun calculateTrackingStatus(lastRefreshOnStr: String?): TrackingStatus {
-        val lastRefreshDate = parseDate(lastRefreshOnStr) ?: return TrackingStatus.OFFLINE
+        val lastRefreshDate = parseDate(lastRefreshOnStr) ?: return TrackingStatus.ACTIVE
         val diffMs = System.currentTimeMillis() - lastRefreshDate.time
         val diffMins = diffMs / (1000 * 60)
-        return if (diffMins <= 10) {
+        return if (diffMins <= 15) {
             TrackingStatus.ACTIVE
         } else {
             TrackingStatus.OFFLINE
@@ -168,6 +168,7 @@ class BmtcRepository private constructor(context: Context) {
             try {
                 val sdf = SimpleDateFormat(format, Locale.ENGLISH)
                 sdf.timeZone = TimeZone.getTimeZone("Asia/Kolkata") // BMTC dates are in India Standard Time
+                sdf.isLenient = false
                 return sdf.parse(normalized)
             } catch (e: Exception) {
                 // Try next format

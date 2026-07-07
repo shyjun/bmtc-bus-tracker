@@ -76,7 +76,10 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
             stopTrackingService()
             cancelStaleNotification()
             repository.setStaleNotificationSent(false)
-        }
+    }
+
+    fun parseDate(dateStr: String?): java.util.Date? {
+        return repository.parseDate(dateStr)
     }
 
     private fun startTrackingService() {
