@@ -149,8 +149,7 @@ fun BusTrackerScreen(
                             monitoringInterval = viewModel.monitoringInterval,
                             offlineNotificationInterval = viewModel.offlineNotificationInterval,
                             onMonitoringToggled = { viewModel.onMonitoringToggled(it) },
-                            onNotificationsToggled = { viewModel.onNotificationsToggled(it) },
-                            onSettingsClick = { viewModel.openSettings() }
+                            onNotificationsToggled = { viewModel.onNotificationsToggled(it) }
                         )
                     }
 
@@ -863,8 +862,7 @@ fun SettingsCard(
     monitoringInterval: Int,
     offlineNotificationInterval: Int,
     onMonitoringToggled: (Boolean) -> Unit,
-    onNotificationsToggled: (Boolean) -> Unit,
-    onSettingsClick: () -> Unit
+    onNotificationsToggled: (Boolean) -> Unit
 ) {
     val monitoringTint = if (monitoringEnabled) TrackingGreen else TextHint
     val monitoringBg = if (monitoringEnabled) TrackingGreen.copy(alpha = 0.12f) else DividerGray
@@ -874,9 +872,7 @@ fun SettingsCard(
     TrackerCard {
         Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onSettingsClick() },
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
@@ -938,9 +934,7 @@ fun SettingsCard(
             )
 
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onSettingsClick() },
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {

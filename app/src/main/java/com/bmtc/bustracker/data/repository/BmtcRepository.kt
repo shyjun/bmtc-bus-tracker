@@ -23,6 +23,7 @@ data class TrackingUiState(
     val busNumber: String = "",
     val vehicleId: Int = 0,
     val monitoringEnabled: Boolean = true,
+    val notificationsEnabled: Boolean = true,
     val locationDetails: LiveLocationDetails? = null,
     val trackingStatus: TrackingStatus = TrackingStatus.OFFLINE,
     val isLoading: Boolean = false,
@@ -47,6 +48,7 @@ class BmtcRepository private constructor(context: Context) {
         val busNum = prefsHelper.getBusNumber()
         val vehId = prefsHelper.getVehicleId()
         val monEnabled = prefsHelper.isMonitoringEnabled()
+        val notifEnabled = prefsHelper.isNotificationsEnabled()
         val lastLoc = prefsHelper.getLastLocation()
 
         val status = if (lastLoc != null) {
@@ -61,6 +63,7 @@ class BmtcRepository private constructor(context: Context) {
                     busNumber = busNum,
                     vehicleId = vehId,
                     monitoringEnabled = monEnabled,
+                    notificationsEnabled = notifEnabled,
                     locationDetails = lastLoc,
                     trackingStatus = status
                 )
@@ -84,7 +87,10 @@ class BmtcRepository private constructor(context: Context) {
     }
 
     fun getNotificationsEnabled(): Boolean = prefsHelper.isNotificationsEnabled()
-    fun setNotificationsEnabled(enabled: Boolean) = prefsHelper.saveNotificationsEnabled(enabled)
+    fun setNotificationsEnabled(enabled: Boolean) {
+        prefsHelper.saveNotificationsEnabled(enabled)
+        _uiState.update { it.copy(notificationsEnabled = enabled) }
+    }
 
     fun saveTrackedBus(busNumber: String, vehicleId: Int) {
         prefsHelper.saveBusNumber(busNumber)
