@@ -73,11 +73,16 @@ class BmtcRepository private constructor(context: Context) {
     fun getMonitoringEnabled(): Boolean = prefsHelper.isMonitoringEnabled()
     fun isStaleNotificationSent(): Boolean = prefsHelper.isStaleNotificationSent()
     fun setStaleNotificationSent(sent: Boolean) = prefsHelper.saveStaleNotificationSent(sent)
+    fun getMonitoringInterval(): Int = prefsHelper.getMonitoringInterval()
+    fun getOfflineNotificationInterval(): Int = prefsHelper.getOfflineNotificationInterval()
 
     fun setMonitoringEnabled(enabled: Boolean) {
         prefsHelper.saveMonitoringEnabled(enabled)
         _uiState.update { it.copy(monitoringEnabled = enabled) }
     }
+
+    fun getNotificationsEnabled(): Boolean = prefsHelper.isNotificationsEnabled()
+    fun setNotificationsEnabled(enabled: Boolean) = prefsHelper.saveNotificationsEnabled(enabled)
 
     fun saveTrackedBus(busNumber: String, vehicleId: Int) {
         prefsHelper.saveBusNumber(busNumber)
@@ -168,7 +173,8 @@ class BmtcRepository private constructor(context: Context) {
         val lastRefreshDate = parseDate(lastRefreshOnStr) ?: return TrackingStatus.ACTIVE
         val diffMs = System.currentTimeMillis() - lastRefreshDate.time
         val diffMins = diffMs / (1000 * 60)
-        return if (diffMins <= 15) {
+        val threshold = getOfflineNotificationInterval()
+        return if (diffMins <= threshold) {
             TrackingStatus.ACTIVE
         } else {
             TrackingStatus.OFFLINE

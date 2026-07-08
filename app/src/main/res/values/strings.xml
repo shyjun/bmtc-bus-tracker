@@ -9,37 +9,38 @@
     <string name="notification_status">Notification Status</string>
     <string name="notification_enabled">Enabled</string>
     <string name="notification_disabled">Disabled</string>
-    
+    <string name="notifications_enabled">Notifications Enabled</string>
+
     <string name="tracking_active">Tracking Active</string>
     <string name="tracking_offline">Tracking Offline</string>
-    
+
     <string name="no_internet">No Internet Connection</string>
     <string name="no_active_trip">No Active Trip Available</string>
     <string name="bus_not_found">Bus Not Found</string>
     <string name="error_unknown">Unknown error: %s</string>
-    
+
     <string name="last_updated">Last Updated</string>
     <string name="previous_stop">PREVIOUS STOP</string>
     <string name="next_stop">NEXT STOP</string>
     <string name="bus_is_between">Bus is currently between</string>
-    
+
     <string name="channel_name">Bus Tracker Service</string>
     <string name="channel_desc">Monitors bus location updates in the background.</string>
-    
+
     <string name="stale_channel_name">Tracking Alerts</string>
     <string name="stale_channel_desc">Alerts when bus tracking becomes offline or stale.</string>
-    
+
     <string name="notification_title_active">Tracking Bus %s</string>
     <string name="notification_text_active">Last updated: %s</string>
-    
+
     <string name="notification_title_stale">BMTC Tracking Stopped</string>
     <string name="notification_text_stale_format">Bus %1$s\nNo tracking update received since\n%2$s</string>
-    
+
     <string name="enter_bus_number">Enter Bus Number</string>
     <string name="enter_bus_number_hint">Enter bus number (e.g., KA57F4864)</string>
-    
+
     <string name="button_track">TRACK</string>
     <string name="button_refresh">REFRESH</string>
-    
+
     <string name="data_source_footer">Data provided by BMTC  •  Updates every 5 minutes</string>
 </resources>

@@ -44,6 +44,11 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
     var resolvedVehicleId by mutableStateOf<Int?>(null)
         private set
 
+    val monitoringInterval: Int get() = repository.getMonitoringInterval()
+    val offlineNotificationInterval: Int get() = repository.getOfflineNotificationInterval()
+    val monitoringEnabled: Boolean get() = repository.getMonitoringEnabled()
+    val notificationsEnabled: Boolean get() = repository.getNotificationsEnabled()
+
     private var searchJob: Job? = null
 
     init {
@@ -149,6 +154,14 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
             startTrackingService()
         } else {
             stopTrackingService()
+            cancelStaleNotification()
+            repository.setStaleNotificationSent(false)
+        }
+    }
+
+    fun onNotificationsToggled(enabled: Boolean) {
+        repository.setNotificationsEnabled(enabled)
+        if (!enabled) {
             cancelStaleNotification()
             repository.setStaleNotificationSent(false)
         }

@@ -35,6 +35,14 @@ class PreferencesHelper(context: Context) {
         return sharedPreferences.getBoolean(KEY_MONITORING_ENABLED, true)
     }
 
+    fun saveNotificationsEnabled(enabled: Boolean) {
+        sharedPreferences.edit().putBoolean(KEY_NOTIFICATIONS_ENABLED, enabled).apply()
+    }
+
+    fun isNotificationsEnabled(): Boolean {
+        return sharedPreferences.getBoolean(KEY_NOTIFICATIONS_ENABLED, true)
+    }
+
     fun saveLastLocation(location: LiveLocationDetails?) {
         val json = if (location != null) gson.toJson(location) else null
         sharedPreferences.edit().putString(KEY_LAST_LOCATION, json).apply()
@@ -57,12 +65,31 @@ class PreferencesHelper(context: Context) {
         return sharedPreferences.getBoolean(KEY_STALE_NOTIFICATION_SENT, false)
     }
 
+    fun saveMonitoringInterval(minutes: Int) {
+        sharedPreferences.edit().putInt(KEY_MONITORING_INTERVAL, minutes).apply()
+    }
+
+    fun getMonitoringInterval(): Int {
+        return sharedPreferences.getInt(KEY_MONITORING_INTERVAL, 5)
+    }
+
+    fun saveOfflineNotificationInterval(minutes: Int) {
+        sharedPreferences.edit().putInt(KEY_OFFLINE_NOTIFICATION_INTERVAL, minutes).apply()
+    }
+
+    fun getOfflineNotificationInterval(): Int {
+        return sharedPreferences.getInt(KEY_OFFLINE_NOTIFICATION_INTERVAL, 15)
+    }
+
     companion object {
         private const val PREFS_NAME = "bmtc_bus_tracker_prefs"
         private const val KEY_BUS_NUMBER = "bus_number"
         private const val KEY_VEHICLE_ID = "vehicle_id"
         private const val KEY_MONITORING_ENABLED = "monitoring_enabled"
+        private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
         private const val KEY_LAST_LOCATION = "last_location"
         private const val KEY_STALE_NOTIFICATION_SENT = "stale_notification_sent"
+        private const val KEY_MONITORING_INTERVAL = "monitoring_interval"
+        private const val KEY_OFFLINE_NOTIFICATION_INTERVAL = "offline_notification_interval"
     }
 }

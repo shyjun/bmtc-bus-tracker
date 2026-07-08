@@ -34,7 +34,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.res.stringResource
@@ -142,15 +141,13 @@ fun BusTrackerScreen(
                             nextStop = state.locationDetails?.nextStop
                         )
 
-                        MonitoringCard(
-                            monitoringEnabled = state.monitoringEnabled,
-                            onMonitoringToggle = { viewModel.onMonitoringToggled(it) }
-                        )
-
-                        BottomInfoCard(
-                            lastRefreshOn = state.locationDetails?.lastRefreshOn,
-                            trackingStatus = state.trackingStatus,
-                            monitoringEnabled = state.monitoringEnabled
+                        SettingsCard(
+                            monitoringEnabled = viewModel.monitoringEnabled,
+                            notificationsEnabled = viewModel.notificationsEnabled,
+                            monitoringInterval = viewModel.monitoringInterval,
+                            offlineNotificationInterval = viewModel.offlineNotificationInterval,
+                            onMonitoringToggled = { viewModel.onMonitoringToggled(it) },
+                            onNotificationsToggled = { viewModel.onNotificationsToggled(it) }
                         )
                     }
 
@@ -833,56 +830,37 @@ fun DashedVerticalLine(
 }
 
 @Composable
-fun MonitoringCard(
+fun SettingsCard(
     monitoringEnabled: Boolean,
-    onMonitoringToggle: (Boolean) -> Unit
+    notificationsEnabled: Boolean,
+    monitoringInterval: Int,
+    offlineNotificationInterval: Int,
+    onMonitoringToggled: (Boolean) -> Unit,
+    onNotificationsToggled: (Boolean) -> Unit
 ) {
-    val cardBackground by animateColorAsState(
-        targetValue = if (monitoringEnabled) BmtcBlueContainer.copy(alpha = 0.5f) else Color(0xFFEBEBEB),
-        label = "monitoring_card_bg"
-    )
+    val monitoringTint = if (monitoringEnabled) TrackingGreen else TextHint
+    val monitoringBg = if (monitoringEnabled) TrackingGreen.copy(alpha = 0.12f) else DividerGray
+    val notificationTint = if (notificationsEnabled) AlertRed else TextHint
+    val notificationBg = if (notificationsEnabled) AlertRed.copy(alpha = 0.12f) else DividerGray
 
-    val shieldColor = if (monitoringEnabled) TrackingGreen else TextHint
-    val shieldBg = if (monitoringEnabled) TrackingGreen.copy(alpha = 0.12f) else DividerGray
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(elevation = 4.dp, shape = RoundedCornerShape(16.dp), clip = false),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = cardBackground),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.monitoring_status),
-                style = MaterialTheme.typography.titleSmall.copy(
-                    color = BmtcBlue,
-                    fontWeight = FontWeight.Bold
-                )
-            )
-
+    TrackerCard {
+        Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(14.dp),
-                modifier = Modifier.fillMaxWidth()
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 Box(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(CircleShape)
-                        .background(shieldBg),
+                        .background(monitoringBg),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Filled.Shield,
-                        contentDescription = "Shield",
-                        tint = shieldColor,
+                        contentDescription = "Monitoring",
+                        tint = monitoringTint,
                         modifier = Modifier.size(24.dp)
                     )
                 }
@@ -892,59 +870,28 @@ fun MonitoringCard(
                     verticalArrangement = Arrangement.spacedBy(2.dp)
                 ) {
                     Text(
-                        text = if (monitoringEnabled) stringResource(R.string.monitoring_enabled) else stringResource(R.string.monitoring_disabled),
+                        text = "Monitoring",
                         style = MaterialTheme.typography.bodyLarge.copy(
-                            color = if (monitoringEnabled) TrackingGreen else TextSecondary,
-                            fontWeight = FontWeight.Bold
-                        )
-                    )
-
-                    if (monitoringEnabled) {
-                        Text(
-                            text = stringResource(R.string.monitoring_checking_desc),
-                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
-                        )
-                        Text(
-                            text = stringResource(R.string.monitoring_alert_desc),
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = BmtcBlue,
-                                fontWeight = FontWeight.SemiBold
-                            )
-                        )
-                    }
-                }
-            }
-
-            HorizontalDivider(
-                color = if (monitoringEnabled) DividerGray else DividerGray.copy(alpha = 0.5f),
-                thickness = 1.dp
-            )
-
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                    Text(
-                        text = stringResource(R.string.notification_status),
-                        style = MaterialTheme.typography.bodyMedium.copy(
                             color = TextPrimary,
                             fontWeight = FontWeight.Bold
                         )
                     )
                     Text(
-                        text = if (monitoringEnabled) stringResource(R.string.notification_enabled) else stringResource(R.string.notification_disabled),
+                        text = if (monitoringEnabled) stringResource(R.string.monitoring_enabled) else stringResource(R.string.monitoring_disabled),
                         style = MaterialTheme.typography.bodySmall.copy(
-                            color = if (monitoringEnabled) BmtcBlue else TextSecondary,
+                            color = if (monitoringEnabled) TrackingGreen else TextSecondary,
                             fontWeight = FontWeight.SemiBold
                         )
+                    )
+                    Text(
+                        text = "Checking every $monitoringInterval minutes",
+                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
                     )
                 }
 
                 Switch(
                     checked = monitoringEnabled,
-                    onCheckedChange = onMonitoringToggle,
+                    onCheckedChange = onMonitoringToggled,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color.White,
                         checkedTrackColor = BmtcBlue,
@@ -953,143 +900,68 @@ fun MonitoringCard(
                     )
                 )
             }
-        }
-    }
-}
 
-@Composable
-fun BottomInfoCard(
-    lastRefreshOn: String?,
-    trackingStatus: TrackingStatus,
-    monitoringEnabled: Boolean
-) {
-    val timeOnly = remember(lastRefreshOn) {
-        if (lastRefreshOn != null) {
-            try {
-                val formats = listOf("dd-MMM-yyyy HH:mm:ss", "yyyy-MM-dd HH:mm:ss", "yyyy-MM-dd'T'HH:mm:ss")
-                var parsedDate: java.util.Date? = null
-                for (format in formats) {
-                    try {
-                        val sdf = SimpleDateFormat(format, Locale.ENGLISH)
-                        sdf.timeZone = TimeZone.getTimeZone("Asia/Kolkata")
-                        parsedDate = sdf.parse(lastRefreshOn)
-                        if (parsedDate != null) break
-                    } catch (e: Exception) {}
+            HorizontalDivider(
+                modifier = Modifier.padding(vertical = 12.dp),
+                color = DividerGray,
+                thickness = 1.dp
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(14.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(notificationBg),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.Notifications,
+                        contentDescription = "Notifications",
+                        tint = notificationTint,
+                        modifier = Modifier.size(24.dp)
+                    )
                 }
-                if (parsedDate != null) {
-                    val sdf = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
-                    sdf.timeZone = TimeZone.getDefault()
-                    sdf.format(parsedDate)
-                } else {
-                    lastRefreshOn
+
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        text = "Notifications",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            color = TextPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    )
+                    Text(
+                        text = if (notificationsEnabled) stringResource(R.string.notifications_enabled) else stringResource(R.string.notification_disabled),
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = if (notificationsEnabled) TrackingGreen else TextSecondary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    )
+                    Text(
+                        text = "Alert after $offlineNotificationInterval minutes without updates",
+                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                    )
                 }
-            } catch (e: Exception) {
-                lastRefreshOn
+
+                Switch(
+                    checked = notificationsEnabled,
+                    onCheckedChange = onNotificationsToggled,
+                    colors = SwitchDefaults.colors(
+                        checkedThumbColor = Color.White,
+                        checkedTrackColor = BmtcBlue,
+                        uncheckedThumbColor = Color.White,
+                        uncheckedTrackColor = DividerGray
+                    )
+                )
             }
-        } else {
-            "--:--:--"
-        }
-    }
-
-    val statusVal = when (trackingStatus) {
-        TrackingStatus.ACTIVE -> "Running"
-        TrackingStatus.OFFLINE -> "Offline"
-        TrackingStatus.NO_INTERNET -> "No Internet"
-    }
-
-    val statusValColor = when (trackingStatus) {
-        TrackingStatus.ACTIVE -> StatusRunningGreen
-        TrackingStatus.OFFLINE -> AlertRed
-        TrackingStatus.NO_INTERNET -> TextSecondary
-    }
-
-    val alertVal = if (monitoringEnabled) "Enabled" else "Disabled"
-    val alertValColor = if (monitoringEnabled) AlertRed else TextSecondary
-
-    TrackerCard {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            InfoColumn(
-                icon = Icons.Outlined.AccessTime,
-                iconTint = TrackingGreen,
-                title = stringResource(R.string.last_updated),
-                value = timeOnly,
-                valueColor = TextPrimary
-            )
-
-            VerticalDivider(
-                modifier = Modifier.height(60.dp),
-                color = DividerGray,
-                thickness = 1.dp
-            )
-
-            InfoColumn(
-                icon = Icons.Outlined.Sync,
-                iconTint = BmtcBlue,
-                title = "Status",
-                value = statusVal,
-                valueColor = statusValColor
-            )
-
-            VerticalDivider(
-                modifier = Modifier.height(60.dp),
-                color = DividerGray,
-                thickness = 1.dp
-            )
-
-            InfoColumn(
-                icon = Icons.Outlined.NotificationsActive,
-                iconTint = AlertRed,
-                title = "Alert",
-                value = alertVal,
-                valueColor = alertValColor
-            )
-        }
-    }
-}
-
-@Composable
-fun InfoColumn(
-    icon: ImageVector,
-    iconTint: Color,
-    title: String,
-    value: String,
-    valueColor: Color
-) {
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(4.dp),
-        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = title,
-            tint = iconTint,
-            modifier = Modifier.size(26.dp)
-        )
-        Text(
-            text = title,
-            style = MaterialTheme.typography.labelSmall.copy(
-                color = TextSecondary,
-                fontWeight = FontWeight.Medium
-            ),
-            textAlign = TextAlign.Center
-        )
-        AnimatedContent(
-            targetState = value,
-            transitionSpec = { fadeIn() togetherWith fadeOut() },
-            label = "info_val"
-        ) { targetValue ->
-            Text(
-                text = targetValue,
-                style = MaterialTheme.typography.labelMedium.copy(
-                    color = valueColor,
-                    fontWeight = FontWeight.Bold
-                ),
-                textAlign = TextAlign.Center
-            )
         }
     }
 }

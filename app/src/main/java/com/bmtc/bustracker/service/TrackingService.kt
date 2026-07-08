@@ -63,25 +63,22 @@ class TrackingService : Service() {
         pollingJob = serviceScope.launch {
             while (true) {
                 val result = repository.fetchTrackingUpdate(busNumber, vehicleId)
-                
-                // After fetching, check freshness
+
                 val state = repository.uiState.value
                 val location = state.locationDetails
-                
+
                 if (state.trackingStatus == TrackingStatus.OFFLINE) {
-                    // Stale tracking
-                    if (!repository.isStaleNotificationSent()) {
+                    if (!repository.isStaleNotificationSent() && repository.getNotificationsEnabled()) {
                         showStaleNotification(busNumber, location?.lastRefreshOn)
                         repository.setStaleNotificationSent(true)
                     }
                 } else if (state.trackingStatus == TrackingStatus.ACTIVE) {
-                    // Active tracking
                     cancelStaleNotification()
                     repository.setStaleNotificationSent(false)
                 }
 
-                // Wait 5 minutes before polling again
-                delay(POLLING_INTERVAL_MS)
+                val intervalMinutes = repository.getMonitoringInterval()
+                delay(intervalMinutes * 60 * 1000L)
             }
         }
     }
@@ -191,8 +188,5 @@ class TrackingService : Service() {
         private const val ALERT_CHANNEL_ID = "bmtc_tracker_alerts_channel"
         private const val SERVICE_NOTIFICATION_ID = 1001
         private const val STALE_NOTIFICATION_ID = 1002
-        
-        // 5 minutes in milliseconds
-        private const val POLLING_INTERVAL_MS = 5 * 60 * 1000L
     }
 }
