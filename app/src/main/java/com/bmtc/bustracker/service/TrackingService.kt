@@ -58,10 +58,21 @@ class TrackingService : Service() {
         return START_STICKY
     }
 
+    private fun formatIntervalText(seconds: Int, notificationsEnabled: Boolean): String {
+        val interval = if (seconds % 60 == 0 && seconds >= 60) {
+            "Checking every ${seconds / 60} minutes"
+        } else {
+            "Checking every $seconds seconds"
+        }
+        val notif = if (notificationsEnabled) "ON" else "OFF"
+        return "$interval · Notif: $notif"
+    }
+
     private fun startPolling(busNumber: String, vehicleId: Int) {
         pollingJob?.cancel()
         pollingJob = serviceScope.launch {
             while (true) {
+                updateForegroundNotification(busNumber)
                 val result = repository.fetchTrackingUpdate(busNumber, vehicleId)
 
                 val state = repository.uiState.value
@@ -133,7 +144,7 @@ class TrackingService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val text = getString(R.string.monitoring_checking_desc)
+        val text = formatIntervalText(repository.getMonitoringInterval(), repository.getNotificationsEnabled())
 
         return NotificationCompat.Builder(this, FOREGROUND_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
@@ -143,6 +154,12 @@ class TrackingService : Service() {
             .setContentIntent(pendingIntent)
             .setOngoing(true)
             .build()
+    }
+
+    private fun updateForegroundNotification(busNumber: String) {
+        val notification = createForegroundNotification(busNumber)
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(SERVICE_NOTIFICATION_ID, notification)
     }
 
     private fun createNotificationChannels() {

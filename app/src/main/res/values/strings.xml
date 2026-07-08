@@ -4,7 +4,7 @@
     <string name="monitoring_status">Monitoring Status</string>
     <string name="monitoring_enabled">Monitoring Enabled</string>
     <string name="monitoring_disabled">Monitoring Disabled</string>
-    <string name="monitoring_checking_desc">Checking every 5 minutes</string>
+
     <string name="monitoring_alert_desc">Alert after 15 minutes without tracking updates</string>
     <string name="notification_status">Notification Status</string>
     <string name="notification_enabled">Enabled</string>
