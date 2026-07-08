@@ -147,7 +147,8 @@ fun BusTrackerScreen(
                             monitoringInterval = viewModel.monitoringInterval,
                             offlineNotificationInterval = viewModel.offlineNotificationInterval,
                             onMonitoringToggled = { viewModel.onMonitoringToggled(it) },
-                            onNotificationsToggled = { viewModel.onNotificationsToggled(it) }
+                            onNotificationsToggled = { viewModel.onNotificationsToggled(it) },
+                            onSettingsClick = { viewModel.openSettings() }
                         )
                     }
 
@@ -836,7 +837,8 @@ fun SettingsCard(
     monitoringInterval: Int,
     offlineNotificationInterval: Int,
     onMonitoringToggled: (Boolean) -> Unit,
-    onNotificationsToggled: (Boolean) -> Unit
+    onNotificationsToggled: (Boolean) -> Unit,
+    onSettingsClick: () -> Unit
 ) {
     val monitoringTint = if (monitoringEnabled) TrackingGreen else TextHint
     val monitoringBg = if (monitoringEnabled) TrackingGreen.copy(alpha = 0.12f) else DividerGray
@@ -846,7 +848,9 @@ fun SettingsCard(
     TrackerCard {
         Column(verticalArrangement = Arrangement.spacedBy(0.dp)) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSettingsClick() },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
@@ -884,7 +888,7 @@ fun SettingsCard(
                         )
                     )
                     Text(
-                        text = "Checking every $monitoringInterval minutes",
+                        text = "Checking every $monitoringInterval seconds",
                         style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
                     )
                 }
@@ -908,7 +912,9 @@ fun SettingsCard(
             )
 
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { onSettingsClick() },
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(14.dp)
             ) {
@@ -962,6 +968,150 @@ fun SettingsCard(
                     )
                 )
             }
+        }
+    }
+}
+
+@Composable
+fun SettingsDialog(
+    monitoringSecs: Int,
+    offlineMins: Int,
+    onMonitoringSecsDecrement: () -> Unit,
+    onMonitoringSecsIncrement: () -> Unit,
+    onOfflineMinsDecrement: () -> Unit,
+    onOfflineMinsIncrement: () -> Unit,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "System Settings",
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold
+                )
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Monitoring Interval (secs)",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                    )
+                    Text(
+                        text = "How often the application polls the BMTC server for updated vehicle location.",
+                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                    )
+                    StepperControl(
+                        value = monitoringSecs,
+                        onDecrement = onMonitoringSecsDecrement,
+                        onIncrement = onMonitoringSecsIncrement
+                    )
+                }
+
+                HorizontalDivider(color = DividerGray)
+
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Offline Notification Interval (mins)",
+                        style = MaterialTheme.typography.bodyLarge.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            color = TextPrimary
+                        )
+                    )
+                    Text(
+                        text = "Notify me if BMTC has not updated the vehicle location for this duration.",
+                        style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                    )
+                    StepperControl(
+                        value = offlineMins,
+                        onDecrement = onOfflineMinsDecrement,
+                        onIncrement = onOfflineMinsIncrement
+                    )
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(
+                    text = "OK",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(
+                    text = "CANCEL",
+                    style = MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.Bold)
+                )
+            }
+        },
+        shape = RoundedCornerShape(20.dp)
+    )
+}
+
+@Composable
+fun StepperControl(
+    value: Int,
+    onDecrement: () -> Unit,
+    onIncrement: () -> Unit
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.Center,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        FilledIconButton(
+            onClick = onDecrement,
+            modifier = Modifier.size(48.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = BmtcBlue,
+                contentColor = Color.White
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Remove,
+                contentDescription = "Decrease",
+                modifier = Modifier.size(24.dp)
+            )
+        }
+
+        Box(
+            modifier = Modifier
+                .widthIn(min = 100.dp)
+                .padding(horizontal = 16.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = value.toString(),
+                style = MaterialTheme.typography.headlineMedium.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = TextPrimary
+                )
+            )
+        }
+
+        FilledIconButton(
+            onClick = onIncrement,
+            modifier = Modifier.size(48.dp),
+            shape = RoundedCornerShape(12.dp),
+            colors = IconButtonDefaults.filledIconButtonColors(
+                containerColor = BmtcBlue,
+                contentColor = Color.White
+            )
+        ) {
+            Icon(
+                imageVector = Icons.Filled.Add,
+                contentDescription = "Increase",
+                modifier = Modifier.size(24.dp)
+            )
         }
     }
 }

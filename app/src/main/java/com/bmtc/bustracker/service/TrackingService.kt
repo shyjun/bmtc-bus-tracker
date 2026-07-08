@@ -77,8 +77,8 @@ class TrackingService : Service() {
                     repository.setStaleNotificationSent(false)
                 }
 
-                val intervalMinutes = repository.getMonitoringInterval()
-                delay(intervalMinutes * 60 * 1000L)
+                val intervalSecs = repository.getMonitoringInterval()
+                delay(intervalSecs * 1000L)
             }
         }
     }

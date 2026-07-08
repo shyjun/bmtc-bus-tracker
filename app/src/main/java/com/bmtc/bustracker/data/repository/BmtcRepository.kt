@@ -75,6 +75,8 @@ class BmtcRepository private constructor(context: Context) {
     fun setStaleNotificationSent(sent: Boolean) = prefsHelper.saveStaleNotificationSent(sent)
     fun getMonitoringInterval(): Int = prefsHelper.getMonitoringInterval()
     fun getOfflineNotificationInterval(): Int = prefsHelper.getOfflineNotificationInterval()
+    fun setMonitoringInterval(seconds: Int) = prefsHelper.saveMonitoringInterval(seconds)
+    fun setOfflineNotificationInterval(minutes: Int) = prefsHelper.saveOfflineNotificationInterval(minutes)
 
     fun setMonitoringEnabled(enabled: Boolean) {
         prefsHelper.saveMonitoringEnabled(enabled)

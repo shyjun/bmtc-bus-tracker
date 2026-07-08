@@ -65,12 +65,12 @@ class PreferencesHelper(context: Context) {
         return sharedPreferences.getBoolean(KEY_STALE_NOTIFICATION_SENT, false)
     }
 
-    fun saveMonitoringInterval(minutes: Int) {
-        sharedPreferences.edit().putInt(KEY_MONITORING_INTERVAL, minutes).apply()
+    fun saveMonitoringInterval(seconds: Int) {
+        sharedPreferences.edit().putInt(KEY_MONITORING_INTERVAL, seconds).apply()
     }
 
     fun getMonitoringInterval(): Int {
-        return sharedPreferences.getInt(KEY_MONITORING_INTERVAL, 5)
+        return sharedPreferences.getInt(KEY_MONITORING_INTERVAL, 300)
     }
 
     fun saveOfflineNotificationInterval(minutes: Int) {
@@ -89,7 +89,7 @@ class PreferencesHelper(context: Context) {
         private const val KEY_NOTIFICATIONS_ENABLED = "notifications_enabled"
         private const val KEY_LAST_LOCATION = "last_location"
         private const val KEY_STALE_NOTIFICATION_SENT = "stale_notification_sent"
-        private const val KEY_MONITORING_INTERVAL = "monitoring_interval"
-        private const val KEY_OFFLINE_NOTIFICATION_INTERVAL = "offline_notification_interval"
+        private const val KEY_MONITORING_INTERVAL = "monitor_interval_secs"
+        private const val KEY_OFFLINE_NOTIFICATION_INTERVAL = "offline_notification_minutes"
     }
 }

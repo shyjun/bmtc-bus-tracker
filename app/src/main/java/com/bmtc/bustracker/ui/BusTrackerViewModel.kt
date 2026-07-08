@@ -49,6 +49,13 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
     val monitoringEnabled: Boolean get() = repository.getMonitoringEnabled()
     val notificationsEnabled: Boolean get() = repository.getNotificationsEnabled()
 
+    var showSettingsDialog by mutableStateOf(false)
+        private set
+    var dialogMonitoringSecs by mutableStateOf(300)
+        private set
+    var dialogOfflineMins by mutableStateOf(15)
+        private set
+
     private var searchJob: Job? = null
 
     init {
@@ -164,6 +171,50 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
         if (!enabled) {
             cancelStaleNotification()
             repository.setStaleNotificationSent(false)
+        }
+    }
+
+    fun openSettings() {
+        dialogMonitoringSecs = repository.getMonitoringInterval()
+        dialogOfflineMins = repository.getOfflineNotificationInterval()
+        showSettingsDialog = true
+    }
+
+    fun onSettingsDismiss() {
+        showSettingsDialog = false
+    }
+
+    fun onSettingsConfirm() {
+        repository.setMonitoringInterval(dialogMonitoringSecs)
+        repository.setOfflineNotificationInterval(dialogOfflineMins)
+        showSettingsDialog = false
+    }
+
+    fun onMonitoringSecsDecrement() {
+        val newVal = dialogMonitoringSecs - 60
+        if (newVal >= 60) {
+            dialogMonitoringSecs = newVal
+        }
+    }
+
+    fun onMonitoringSecsIncrement() {
+        val newVal = dialogMonitoringSecs + 60
+        if (newVal <= 1800) {
+            dialogMonitoringSecs = newVal
+        }
+    }
+
+    fun onOfflineMinsDecrement() {
+        val newVal = dialogOfflineMins - 5
+        if (newVal >= 5) {
+            dialogOfflineMins = newVal
+        }
+    }
+
+    fun onOfflineMinsIncrement() {
+        val newVal = dialogOfflineMins + 5
+        if (newVal <= 60) {
+            dialogOfflineMins = newVal
         }
     }
 
