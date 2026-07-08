@@ -163,6 +163,9 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
             stopTrackingService()
             cancelStaleNotification()
             repository.setStaleNotificationSent(false)
+            if (repository.getNotificationsEnabled()) {
+                repository.setNotificationsEnabled(false)
+            }
         }
     }
 
@@ -191,28 +194,28 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
     }
 
     fun onMonitoringSecsDecrement() {
-        val newVal = dialogMonitoringSecs - 60
+        val newVal = dialogMonitoringSecs - 30
         if (newVal >= 60) {
             dialogMonitoringSecs = newVal
         }
     }
 
     fun onMonitoringSecsIncrement() {
-        val newVal = dialogMonitoringSecs + 60
+        val newVal = dialogMonitoringSecs + 30
         if (newVal <= 1800) {
             dialogMonitoringSecs = newVal
         }
     }
 
     fun onOfflineMinsDecrement() {
-        val newVal = dialogOfflineMins - 5
+        val newVal = dialogOfflineMins - 1
         if (newVal >= 5) {
             dialogOfflineMins = newVal
         }
     }
 
     fun onOfflineMinsIncrement() {
-        val newVal = dialogOfflineMins + 5
+        val newVal = dialogOfflineMins + 1
         if (newVal <= 60) {
             dialogOfflineMins = newVal
         }

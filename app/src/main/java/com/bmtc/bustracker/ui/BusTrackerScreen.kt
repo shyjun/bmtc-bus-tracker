@@ -980,6 +980,7 @@ fun SettingsCard(
                 Switch(
                     checked = notificationsEnabled,
                     onCheckedChange = onNotificationsToggled,
+                    enabled = monitoringEnabled,
                     colors = SwitchDefaults.colors(
                         checkedThumbColor = Color.White,
                         checkedTrackColor = BmtcBlue,
