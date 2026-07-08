@@ -65,8 +65,8 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
         if (savedBus.isNotBlank() && savedVehicleId > 0) {
             resolvedVehicleId = savedVehicleId
         }
-        if (repository.getMonitoringEnabled() && savedVehicleId > 0) {
-            startTrackingService()
+        if (savedVehicleId > 0) {
+            notifyServiceSettingsChanged()
         }
     }
 
@@ -158,15 +158,16 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
     fun onMonitoringToggled(enabled: Boolean) {
         repository.setMonitoringEnabled(enabled)
         if (enabled) {
-            startTrackingService()
+            cancelStaleNotification()
+            repository.setStaleNotificationSent(false)
         } else {
-            stopTrackingService()
             cancelStaleNotification()
             repository.setStaleNotificationSent(false)
             if (repository.getNotificationsEnabled()) {
                 repository.setNotificationsEnabled(false)
             }
         }
+        notifyServiceSettingsChanged()
     }
 
     fun onNotificationsToggled(enabled: Boolean) {
@@ -175,6 +176,7 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
             cancelStaleNotification()
             repository.setStaleNotificationSent(false)
         }
+        notifyServiceSettingsChanged()
     }
 
     fun openSettings() {
@@ -191,6 +193,7 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
         repository.setMonitoringInterval(dialogMonitoringSecs)
         repository.setOfflineNotificationInterval(dialogOfflineMins)
         showSettingsDialog = false
+        notifyServiceSettingsChanged()
     }
 
     fun onMonitoringSecsDecrement() {
@@ -248,15 +251,21 @@ class BusTrackerViewModel(private val application: Application) : AndroidViewMod
         }
     }
 
-    private fun stopTrackingService() {
-        val intent = Intent(application, TrackingService::class.java)
-        application.stopService(intent)
-    }
-
     private fun cancelStaleNotification() {
         val notificationManager =
             application.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         notificationManager.cancel(1002)
+    }
+
+    private fun notifyServiceSettingsChanged() {
+        val intent = Intent(application, TrackingService::class.java).apply {
+            action = TrackingService.ACTION_UPDATE_NOTIFICATION
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            application.startForegroundService(intent)
+        } else {
+            application.startService(intent)
+        }
     }
 
     class Factory(private val application: Application) : ViewModelProvider.Factory {

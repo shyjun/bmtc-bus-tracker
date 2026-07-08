@@ -41,31 +41,27 @@ class TrackingService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         val busNumber = repository.getSavedBusNumber()
         val vehicleId = repository.getSavedVehicleId()
-        val monitoringEnabled = repository.getMonitoringEnabled()
 
-        if (!monitoringEnabled || busNumber.isBlank() || vehicleId <= 0) {
+        if (busNumber.isBlank() || vehicleId <= 0) {
             stopSelf()
             return START_NOT_STICKY
         }
 
-        // Start Foreground immediately
-        val notification = createForegroundNotification(busNumber)
-        startForeground(SERVICE_NOTIFICATION_ID, notification)
+        startForeground(SERVICE_NOTIFICATION_ID, createForegroundNotification(busNumber))
 
-        // Start Polling Loop if not already running
-        startPolling(busNumber, vehicleId)
+        if (repository.getMonitoringEnabled()) {
+            startPolling(busNumber, vehicleId)
+        } else {
+            pollingJob?.cancel()
+        }
 
         return START_STICKY
     }
 
-    private fun formatIntervalText(seconds: Int, notificationsEnabled: Boolean): String {
-        val interval = if (seconds % 60 == 0 && seconds >= 60) {
-            "Checking every ${seconds / 60} minutes"
-        } else {
-            "Checking every $seconds seconds"
-        }
+    private fun formatIntervalText(seconds: Int, monitoringEnabled: Boolean, notificationsEnabled: Boolean): String {
+        if (!monitoringEnabled) return "Monitoring: OFF"
         val notif = if (notificationsEnabled) "ON" else "OFF"
-        return "$interval · Notif: $notif"
+        return "Interval: $seconds secs, Notif: $notif"
     }
 
     private fun startPolling(busNumber: String, vehicleId: Int) {
@@ -144,7 +140,7 @@ class TrackingService : Service() {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
-        val text = formatIntervalText(repository.getMonitoringInterval(), repository.getNotificationsEnabled())
+        val text = formatIntervalText(repository.getMonitoringInterval(), repository.getMonitoringEnabled(), repository.getNotificationsEnabled())
 
         return NotificationCompat.Builder(this, FOREGROUND_CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_notify_sync)
@@ -201,6 +197,7 @@ class TrackingService : Service() {
     }
 
     companion object {
+        const val ACTION_UPDATE_NOTIFICATION = "com.bmtc.bustracker.UPDATE_NOTIFICATION"
         private const val FOREGROUND_CHANNEL_ID = "bmtc_tracker_service_channel"
         private const val ALERT_CHANNEL_ID = "bmtc_tracker_alerts_channel"
         private const val SERVICE_NOTIFICATION_ID = 1001
