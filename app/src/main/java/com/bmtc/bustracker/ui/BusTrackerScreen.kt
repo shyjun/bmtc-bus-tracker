@@ -101,7 +101,9 @@ fun BusTrackerScreen(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
-                AppHeader()
+                AppHeader(
+                    onSettingsClick = { viewModel.openSettings() }
+                )
 
                 Column(
                     modifier = Modifier
@@ -172,11 +174,26 @@ fun BusTrackerScreen(
                 )
             }
         }
+
+        if (viewModel.showSettingsDialog) {
+            SettingsDialog(
+                monitoringSecs = viewModel.dialogMonitoringSecs,
+                offlineMins = viewModel.dialogOfflineMins,
+                onMonitoringSecsDecrement = { viewModel.onMonitoringSecsDecrement() },
+                onMonitoringSecsIncrement = { viewModel.onMonitoringSecsIncrement() },
+                onOfflineMinsDecrement = { viewModel.onOfflineMinsDecrement() },
+                onOfflineMinsIncrement = { viewModel.onOfflineMinsIncrement() },
+                onDismiss = { viewModel.onSettingsDismiss() },
+                onConfirm = { viewModel.onSettingsConfirm() }
+            )
+        }
     }
 }
 
 @Composable
-fun AppHeader() {
+fun AppHeader(
+    onSettingsClick: () -> Unit = {}
+) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
@@ -206,7 +223,7 @@ fun AppHeader() {
                 )
             }
 
-            Column {
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.app_name),
                     style = MaterialTheme.typography.titleLarge.copy(
@@ -242,6 +259,15 @@ fun AppHeader() {
                         )
                     )
                 }
+            }
+
+            IconButton(onClick = onSettingsClick) {
+                Icon(
+                    imageVector = Icons.Filled.Settings,
+                    contentDescription = "Settings",
+                    tint = Color.White,
+                    modifier = Modifier.size(24.dp)
+                )
             }
         }
     }
